@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mattetti/m3u8Grabber/m3u8"
+	"github.com/lure/m3u8Grabber/m3u8"
 )
 
 var (
@@ -55,8 +55,7 @@ func Start(port int, rootDir, httpP, socksP string) {
 	socksProxy = socksP
 	queue = make(chan *dlRequest)
 	var w sync.WaitGroup
-	stopChan := make(chan bool)
-	m3u8.LaunchWorkers(&w, stopChan)
+	m3u8.LaunchWorkers(&w)
 	go receiveJobs(queue)
 	//log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
 	log.Fatal(http.ListenAndServeTLS(fmt.Sprintf(":%d", port), "cert.pem", "key.pem", nil))

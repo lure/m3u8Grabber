@@ -1,6 +1,7 @@
 package m3u8
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -112,13 +113,13 @@ func AdtsToAac(path string) error {
 }
 
 // TsToMp4 converts a mp4/aac TS file into a MKV file using ffmeg.
-func TsToMp4(inTsPath []string, outMp4Path string) error {
+func TsToMp4(inTsPath []string, outMp4Path string, prependParam []string) error {
 	Logger.Println("converting to mp4")
-	return TsToMkv(inTsPath, outMp4Path)
+	return TsToMkv(inTsPath, outMp4Path, prependParam)
 }
 
 // TsToMkv converts a mp4/aac TS file into a MKV file using ffmeg.
-func TsToMkv(inTsPaths []string, outMkvPath string) (err error) {
+func TsToMkv(inTsPaths []string, outMkvPath string, prependParam []string) (err error) {
 	ffmpegPath, err := FfmpegPath()
 	if err != nil {
 		Logger.Fatalf("ffmpeg wasn't found on your system, it is required to convert video files.\n"+
@@ -148,7 +149,7 @@ func TsToMkv(inTsPaths []string, outMkvPath string) (err error) {
 			"-acodec", "copy",
 			"-bsf:a", "aac_adtstoasc", outMkvPath}...)
 	}
-	cmd := exec.Command(ffmpegPath, args...)
+	cmd := exec.Command(ffmpegPath, append(prependParam, args...)...)
 
 	// Pipe out the cmd output in debug mode
 	if Debug {
@@ -175,7 +176,9 @@ func TsToMkv(inTsPaths []string, outMkvPath string) (err error) {
 
 	state := cmd.ProcessState
 	if !state.Success() {
-		Logger.Println("Error: something went wrong when trying to use ffmpeg")
+		msg := fmt.Sprintf("Error: something went wrong when trying to use ffmpeg. Status %d", state.ExitCode())
+		Logger.Println(msg)
+		err = errors.New(msg)
 	} else {
 		for _, path := range inTsPaths {
 			err = os.Remove(path)

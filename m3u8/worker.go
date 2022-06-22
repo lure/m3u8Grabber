@@ -17,7 +17,6 @@ var (
 	TotalWorkers    = 4
 	DlChan          = make(chan *WJob)
 	segChan         = make(chan *WJob)
-	audioChan       = make(chan *WJob)
 	TmpFolder, _    = ioutil.TempDir("", "m3u8")
 	filenameCleaner = strings.NewReplacer("/", "-", "!", "", "?", "", ",", "")
 )
@@ -34,11 +33,10 @@ const (
 )
 
 // LaunchWorkers starts download workers
-func LaunchWorkers(wg *sync.WaitGroup, stop <-chan bool) {
+func LaunchWorkers(wg *sync.WaitGroup) {
 	// we need to recreate the dlChan and the segChan in case we want to restart workers.
 	DlChan = make(chan *WJob)
 	segChan = make(chan *WJob)
-	audioChan = make(chan *WJob)
 	// the master worker downloads one full m3u8 at a time but
 	// segments are downloaded concurrently
 	masterW := &Worker{id: 0, wg: wg, master: true}
@@ -62,9 +60,10 @@ type WJob struct {
 	Err    error
 	Crypto string
 	// Key is the AES segment key if available
-	Key []byte
-	IV  []byte
-	wg  *sync.WaitGroup
+	Key              []byte
+	IV               []byte
+	wg               *sync.WaitGroup
+	AdditionalParams []string
 }
 
 type Worker struct {
@@ -137,7 +136,7 @@ func (w *Worker) downloadM3u8List(j *WJob) {
 		// download and assemble the audio file
 		audiostreamFilename := j.Filename +
 			"_audio_" + s.Name + "_" + s.Lang
-		defaultAudiostreamPath = j.DestPath + "/" + audiostreamFilename
+		defaultAudiostreamPath = j.DestPath + string(os.PathSeparator) + audiostreamFilename
 		if Debug {
 			Logger.Println("--> Queuing up default audio stream")
 		}
@@ -188,7 +187,8 @@ func (w *Worker) downloadM3u8List(j *WJob) {
 	Logger.Printf("Rebuilding the file now, this step might take a little while.")
 
 	// create the temp video file
-	tmpTsFile := j.DestPath + "/" + j.Filename + ".ts"
+
+	tmpTsFile := j.DestPath + string(os.PathSeparator) + j.Filename + ".ts"
 	if _, err := os.Stat(j.DestPath); err != nil {
 		if os.IsNotExist(err) {
 			// file does not exist
@@ -257,13 +257,13 @@ func (w *Worker) downloadM3u8List(j *WJob) {
 	if hasExtAudio, _ := m3f.HasDefaultExtAudioStream(); hasExtAudio {
 		// add the audio stream to the mix
 		Logger.Printf("Merging the audio stream and converting everything")
-		if err := TsToMp4([]string{tmpTsFile, defaultAudiostreamPath}, mp4Path); err != nil {
+		if err := TsToMp4([]string{tmpTsFile, defaultAudiostreamPath}, mp4Path, j.AdditionalParams); err != nil {
 			j.Err = fmt.Errorf("mp4 conversion error error - %v", err)
 			Logger.Println(j.Err)
 			return
 		}
 	} else {
-		if err := TsToMp4([]string{tmpTsFile}, mp4Path); err != nil {
+		if err := TsToMp4([]string{tmpTsFile}, mp4Path, j.AdditionalParams); err != nil {
 			j.Err = fmt.Errorf("mp4 conversion error error - %v", err)
 			Logger.Println(j.Err)
 			return
@@ -388,7 +388,7 @@ func (w *Worker) downloadM3u8CC(j *WJob) {
 	}
 	subFile := j.AbsolutePath
 	if subFile == "" {
-		subFile = j.DestPath + "/" + j.Filename + filepath.Ext(m3f.Segments[0])
+		subFile = j.DestPath + string(os.PathSeparator) + j.Filename + filepath.Ext(m3f.Segments[0])
 	}
 	Logger.Printf("Downloaded sub file abs path: %s\n", subFile)
 	if _, err := os.Stat(j.DestPath); err != nil {

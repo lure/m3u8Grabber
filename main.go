@@ -4,10 +4,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 
-	"github.com/mattetti/m3u8Grabber/m3u8"
-	"github.com/mattetti/m3u8Grabber/server"
+	"github.com/lure/m3u8Grabber/m3u8"
+	"github.com/lure/m3u8Grabber/server"
 )
 
 // Flags
@@ -22,6 +23,7 @@ var (
 	serverMode     = flag.Bool("server", false, "Enable running a local web server (not working yet).")
 	dlRootDir      = flag.String("root_dir", "/tmp", "The root dir to download files to")
 	mp4Conv        = flag.Bool("mp4", true, "should try to convert to mp4")
+	params         = flag.String("params", "", "additional space-separated params, i.e. \"-dts_delta_threshold 1\"")
 )
 
 func m3u8ArgCheck() {
@@ -59,14 +61,15 @@ func main() {
 
 	if *m3u8Url != "" {
 		w := &sync.WaitGroup{}
-		stopChan := make(chan bool)
-		m3u8.LaunchWorkers(w, stopChan)
+		m3u8.LaunchWorkers(w)
 		job := &m3u8.WJob{
-			Type:          m3u8.ListDL,
-			URL:           *m3u8Url,
-			SkipConverter: !*mp4Conv,
-			DestPath:      pathToUse,
-			Filename:      *outputFileName}
+			Type:             m3u8.ListDL,
+			URL:              *m3u8Url,
+			SkipConverter:    !*mp4Conv,
+			DestPath:         pathToUse,
+			Filename:         *outputFileName,
+			AdditionalParams: strings.Fields(*params),
+		}
 		m3u8.DlChan <- job
 		close(m3u8.DlChan)
 		w.Wait()
